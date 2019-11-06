@@ -198,17 +198,22 @@ class FullyConnectedNet(object):
         # parameters should be initialized to zeros.                               #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        hidden_input = input_dim
         for i in range(1,self.num_layers+1) :
-            if i == 1 :    
-                self.params['W%s'%(i)] = np.random.normal(0,weight_scale,(input_dim,hidden_dims[i-1]))
-                self.params['b%s'%(i)] = np.zeros((hidden_dims[i-1],))
-            elif i == self.num_layers :
+            # for output layer
+            if i == self.num_layers :
                 self.params['W%s'%(i)] = np.random.normal(0,weight_scale,(hidden_dims[i-2],num_classes))
-                self.params['b%s'%(i)] = np.zeros((num_classes,))
-            else : 
-                self.params['W%s'%(i)] = np.random.normal(0,weight_scale,(hidden_dims[i-2],hidden_dims[i-1]))
-                self.params['b%s'%(i)] = np.zeros((hidden_dims[i-1],))
+                self.params['b%s'%(i)] = np.zeros((num_classes))
+                break
+            # for Input~hidden layer
+            hidden_output = hidden_dims[i-1]
+            self.params['W%s'%(i)] = np.random.normal(0,weight_scale,(hidden_input,hidden_output))
+            self.params['b%s'%(i)] = np.zeros((hidden_output))
+            if self.normalization == 'batchnorm' :
+                self.params['gamma%s'%(i)] = np.ones((hidden_output))
+                self.params['beta%s'%(i)] = np.zeros((hidden_output))
+            hidden_input = hidden_output
+        
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -270,13 +275,35 @@ class FullyConnectedNet(object):
         # layer, etc.                                                              #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        # for (L-1 layers) {affine - [batch norm] - Relu - [Dropout]}
+
         N = X.shape[0]
         X = np.reshape(X,[N,-1])
+        cache = {}
+        scores = X
+        for i in range(1,self.num_layers+1) :
+            # for output layer
+            if i == self.num_layers :
+                scores,cache_affine = affine_forward(scores,self.params['W%s'%(i)],self.params['b%s'%(i)])
+                cache['affine_%s'%(i)]=cache_affine
+                break
+            # input~hidden layer forward
+            scores,cache_affine = affine_forward(scores,self.params['W%s'%(i)],self.params['b%s'%(i)])
+            if self.normalization == 'batchnorm' :
+                scores,cache_bn = batchnorm_forward(scores,self.params['gamma%s'%(i)],self.params['beta%s'%(i)],self.bn_params[i-1])
+                cache['bn_%s'%(i)] = cache_bn
+            if self.use_dropout : 
+                pass
+            scores,cache_relu = relu_forward(scores)
+            cache['affine_%s'%(i)] = cache_affine
+            cache['relu_%s'%(i)] = cache_relu
+            
+        """ 
+        # Not using layers function
         layers = []
         layers_without_relu = []
         layers.append(X)
         layers_without_relu.append(X)
-        # for (L-1 layers) {affine - [batch norm] - Relu - [Dropout]}
         for i in range(1,self.num_layers) :
             scores = np.dot(layers[i-1],self.params['W%s'%(i)]) + self.params['b%s'%(i)]
             layers_without_relu.append(scores)
@@ -285,6 +312,7 @@ class FullyConnectedNet(object):
         scores = np.dot(layers[self.num_layers-1],self.params["W%s"%(self.num_layers)]) + self.params['b%s'%(self.num_layers)]
         layers.append(scores)
         layers_without_relu.append(scores)
+        """
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -309,7 +337,29 @@ class FullyConnectedNet(object):
         # of 0.5 to simplify the expression for the gradient.                      #
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
+        loss,dout = softmax_loss(scores,y)
+        # regularization 
+        for i in range(1,self.num_layers+1) :
+            loss += 0.5*self.reg*np.sum(self.params['W%s'%(i)]**2)
+        
+        # grads
+        dout, grads['W%s'%(self.num_layers)],grads['b%s'%(self.num_layers)] = affine_backward(dout, cache['affine_%s'%(self.num_layers)])
+        
+        for i in range(self.num_layers-1,0,-1) :
+            if self.use_dropout : 
+                pass
+            dout = relu_backward(dout,cache['relu_%s'%(i)])
+            if self.normalization == 'batchnorm' :
+                dout,grads['gamma%s'%(i)],grads['beta%s'%(i)] = batchnorm_backward_alt(dout,cache['bn_%s'%(i)])
+            dout, grads['W%s'%(i)],grads['b%s'%(i)] = affine_backward(dout, cache['affine_%s'%(i)])
+            
+        # grads regularization
+        for i in range(1,self.num_layers+1) :
+            grads['W%s'%(i)] += self.reg*self.params['W%s'%(i)]
+        
+        
+        """
+        # Not using layers function
         scores -= np.amax(scores,axis=1,keepdims=True)
         p = np.exp(scores) / np.sum(np.exp(scores),axis=1,keepdims=True)
         loss = -np.log(p[range(N),y])
@@ -330,7 +380,7 @@ class FullyConnectedNet(object):
             grads['b%s'%(i)] = np.sum(dlast,axis=0)
             dlast = np.dot(dlast,self.params['W%s'%(i)].T)
             dlast = dlast*(layers_without_relu[i-1]>0)
-
+        """
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #

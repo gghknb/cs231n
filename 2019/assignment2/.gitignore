@@ -1,7 +1,7 @@
 *.swp
 *.pyc
 .env/*
-*/.ipynb_checkpoints/*
+.ipynb_checkpoints/*
 *.pkl
 untitled.ipynb
 # gitignore the built release.
