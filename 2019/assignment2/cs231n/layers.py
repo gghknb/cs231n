@@ -561,9 +561,24 @@ def conv_forward_naive(x, w, b, conv_param):
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    N,C,H,W = x.shape
+    F,_,HH,WW = w.shape
+    stride,pad = conv_param['stride'],conv_param['pad']
+    H_prime = 1 + (2*pad+H-HH) // stride
+    W_prime = 1 + (2*pad+W-WW) // stride
+    out = np.zeros((N,F,H_prime,W_prime))
 
-    pass
-
+    x_pad = np.pad(x,[(0,0),(0,0),(pad,pad),(pad,pad)], 'constant')
+    for i in range(H_prime) :
+        for j in range(W_prime) : 
+            start_col = j*stride
+            last_col = start_col + WW
+            start_row = i*stride
+            last_row = start_row + HH
+            x_mask = x_pad[:,:,start_row:last_row,start_col:last_col]
+            for k in range(F) :
+                out[:,k,i,j] = np.sum(x_mask*w[k,:,:,:],axis=(1,2,3))
+    out = out + b[None,:,None,None]
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -590,8 +605,28 @@ def conv_backward_naive(dout, cache):
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    x,w,b,conv_param = cache
+    N,C,H,W = x.shape
+    F,_,HH,WW = w.shape
+    stride,pad = conv_param['stride'],conv_param['pad']
+    H_prime = 1 + (2*pad+H-HH) // stride
+    W_prime = 1 + (2*pad+W-WW) // stride
+    out = np.zeros((N,F,H_prime,W_prime))
 
-    pass
+    x_pad = np.pad(x,[(0,0),(0,0),(pad,pad),(pad,pad)], 'constant')
+
+    db = np.zeros_like(b) 
+    dx = np.zeros_like(x)
+    dw = np.zeros_like(w)
+    
+    db = np.sum(dout,axis=(0,2,3))
+    
+    for i in range(H_prime) :
+        for j in range(W_prime) :
+            start_col = j*stride
+            last_col = start_col + WW
+            start_row = i*stride
+            last_row = start_row + HH
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
